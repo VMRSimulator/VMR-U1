@@ -2,128 +2,159 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <title>VMR Simulator: U1 - Pixel Edition</title>
+    <title>VMR Simulator: U1 - Curved Track Edition</title>
     <style>
-        body { margin: 0; background: #87CEEB; overflow: hidden; font-family: 'Courier New', monospace; }
-        #ui {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            pointer-events: none; color: #fff; text-shadow: 2px 2px #000;
+        :root { --vmr-red: #cc0000; --glass: rgba(15, 15, 20, 0.95); }
+        body { margin: 0; background: #4da6ff; overflow: hidden; font-family: 'Segoe UI', sans-serif; }
+        #ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; color: white; z-index: 100; }
+        #pids {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            width: 85%; background: var(--glass); padding: 15px; border-radius: 12px;
+            border-bottom: 5px solid var(--vmr-red); display: flex; justify-content: space-between;
+            backdrop-filter: blur(10px);
         }
-        .pids { position: absolute; top: 20px; width: 100%; text-align: center; font-size: 24px; }
-        .dashboard { position: absolute; bottom: 40px; width: 100%; text-align: center; }
-        .speed-box { font-size: 60px; display: inline-block; background: rgba(0,0,0,0.7); padding: 10px 20px; border: 4px solid #fff; }
-        .btn { pointer-events: auto; background: #cc0000; color: #fff; border: 4px solid #fff; padding: 10px; cursor: pointer; font-size: 20px; }
+        #selector { position: absolute; top: 120px; right: 20px; background: var(--glass); padding: 15px; border-radius: 10px; pointer-events: auto; }
+        .sel-btn { background: #333; color: #fff; border: 1px solid #555; padding: 8px; margin: 5px 0; width: 100%; cursor: pointer; border-radius: 4px; font-size: 12px; }
+        .sel-btn:hover { background: var(--vmr-red); }
+        #dashboard { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); display: flex; gap: 20px; align-items: center; pointer-events: auto; }
+        .panel { background: var(--glass); padding: 20px 40px; border-radius: 15px; text-align: center; border: 1px solid rgba(255,255,255,0.1); }
+        #speed { font-size: 64px; color: #00ff00; font-family: 'Consolas', monospace; }
+        .btn { background: #444; color: white; border: none; padding: 15px 30px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 18px; }
     </style>
 </head>
 <body>
 
 <div id="ui">
-    <div class="pids">NEXT: <span id="stn">KEARNY</span></div>
-    <div class="dashboard">
-        <div class="speed-box"><span id="spd">0</span><br><small>km/h</small></div><br><br>
+    <div id="pids">
+        <div>
+            <div style="font-size: 12px; color: #aaa;">NEXT STATION 下一站</div>
+            <div id="stn-name" style="font-size: 28px; font-weight: bold;">LAUREL HILL 勞雷爾山</div>
+        </div>
+        <div style="text-align: right;">
+            <div id="ato" style="color: #00ff00; font-weight: bold;">ATO: ACTIVE</div>
+            <div style="font-size: 14px; color: var(--vmr-red);">VMR U1 - CURVE TEST</div>
+        </div>
+    </div>
+    <div id="selector">
+        <button class="sel-btn" onclick="game.changeTrain('flagship')">U1 Flagship</button>
+        <button class="sel-btn" onclick="game.changeTrain('overhead')">U1-S Overhead</button>
+        <button class="sel-btn" onclick="game.changeTrain('retro')">C-Line Retro</button>
+    </div>
+    <div id="dashboard">
+        <div class="panel"><div id="speed">0</div><div style="font-size:14px; color:#888;">km/h</div></div>
         <button class="btn" onclick="game.toggleATO()">ATO ON/OFF</button>
     </div>
 </div>
 
-<script type="importmap">
-    { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
-</script>
+<script type="importmap"> { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } } </script>
 
 <script type="module">
 import * as THREE from 'three';
 
-class PixelVMR {
+class CurvedVMR {
     constructor() {
         this.speed = 0;
-        this.distance = 0;
+        this.progress = 0; // 0 到 1 之間的行駛進度
         this.isATO = true;
+        this.trainType = 'flagship';
         this.init();
         this.animate();
     }
 
     init() {
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0x87CEEB); // Minecraft 經典天空藍
-        
-        this.camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-        this.camera.position.set(0, 3, 8); // 稍微抬高攝影機，像像素遊戲視角
-        this.camera.lookAt(0, 2, -10);
+        this.scene.background = new THREE.Color(0x4da6ff);
+        this.scene.fog = new THREE.Fog(0x4da6ff, 100, 800);
 
-        this.renderer = new THREE.WebGLRenderer({ antialias: false }); // 像素風不需要平滑抗鋸齒
+        this.camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 2000);
+        this.renderer = new THREE.WebGLRenderer({ antialias: true });
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(this.renderer.domElement);
 
-        const light = new THREE.DirectionalLight(0xffffff, 1.2);
-        light.position.set(5, 10, 5);
-        this.scene.add(light, new THREE.AmbientLight(0xffffff, 0.5));
+        this.scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+        
+        // --- 核心：建立彎道曲線 ---
+        this.curve = new THREE.CatmullRomCurve3([
+            new THREE.Vector3(0, 0, 0),
+            new THREE.Vector3(0, 0, -200),
+            new THREE.Vector3(50, 0, -400),   // 向右彎
+            new THREE.Vector3(150, 0, -600),  // 大彎
+            new THREE.Vector3(100, 0, -800),  // S型反向彎
+            new THREE.Vector3(0, 0, -1000)    // 回到中線
+        ]);
+        this.curve.curveType = 'centripetal';
 
         this.world = new THREE.Group();
         this.scene.add(this.world);
 
-        // --- 生成像素地面 (草地) ---
-        const grassGeo = new THREE.BoxGeometry(100, 1, 2000);
-        const grassMat = new THREE.MeshStandardMaterial({ color: 0x4d9343 });
-        const grass = new THREE.Mesh(grassGeo, grassMat);
-        grass.position.y = -0.5;
-        this.world.add(grass);
-
-        // --- 生成像素路軌 ---
-        for (let i = 0; i < 200; i++) {
-            const sleeper = new THREE.Mesh(
-                new THREE.BoxGeometry(5, 0.3, 1),
-                new THREE.MeshStandardMaterial({ color: 0x54382b }) // 木頭色枕木
-            );
-            sleeper.position.z = -i * 10;
-            this.world.add(sleeper);
-
-            const railLeft = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.4, 10), new THREE.MeshStandardMaterial({color:0x777777}));
-            railLeft.position.set(-1.5, 0.2, -i * 10);
-            this.world.add(railLeft);
-
-            const railRight = railLeft.clone();
-            railRight.position.x = 1.5;
-            this.world.add(railRight);
-        }
-
-        // --- 生成像素車站與房屋 ---
-        const stns = [0, 500, 1000, 1500];
-        stns.forEach(pos => {
-            // 車站方塊
-            const stn = new THREE.Mesh(new THREE.BoxGeometry(12, 8, 30), new THREE.MeshStandardMaterial({color: 0x888888}));
-            stn.position.set(12, 4, -pos);
-            this.world.add(stn);
-
-            // 旁邊的小屋 (Minecraft 風)
-            for(let j=0; j<5; j++) {
-                const house = new THREE.Mesh(new THREE.BoxGeometry(5, 5, 5), new THREE.MeshStandardMaterial({color: 0xeeeeee}));
-                house.position.set(-15, 2.5, -pos - (j*15));
-                this.world.add(house);
-                // 藍色屋頂 (呼應你之前的藍陽台設定)
-                const roof = new THREE.Mesh(new THREE.BoxGeometry(6, 1, 6), new THREE.MeshStandardMaterial({color: 0x0000ff}));
-                roof.position.set(-15, 5.5, -pos - (j*15));
-                this.world.add(roof);
-            }
-        });
+        this.createTrack();
+        this.createTrain();
     }
 
+    createTrack() {
+        // 生成軌道模型
+        const points = this.curve.getPoints(200);
+        const trackGeo = new THREE.TubeGeometry(this.curve, 200, 0.2, 8, false);
+        const railMat = new THREE.MeshStandardMaterial({ color: 0x777777 });
+        
+        // 繪製兩條鋼軌 (左右偏移)
+        const railL = new THREE.Mesh(trackGeo, railMat); railL.position.x = -1.8; this.world.add(railL);
+        const railR = new THREE.Mesh(trackGeo, railMat); railR.position.x = 1.8; this.world.add(railR);
+
+        // 繪製枕木 (每隔一段距離放置一個)
+        for(let i=0; i<=200; i++) {
+            const pos = this.curve.getPointAt(i/200);
+            const tangent = this.curve.getTangentAt(i/200);
+            const sleeper = new THREE.Mesh(new THREE.BoxGeometry(5, 0.3, 1.2), new THREE.MeshStandardMaterial({color: 0x332211}));
+            sleeper.position.copy(pos);
+            sleeper.lookAt(pos.clone().add(tangent));
+            sleeper.rotation.y += Math.PI/2;
+            this.world.add(sleeper);
+        }
+    }
+
+    createTrain() {
+        if(this.trainGroup) this.scene.remove(this.trainGroup);
+        this.trainGroup = new THREE.Group();
+        
+        const body = new THREE.Mesh(new THREE.BoxGeometry(5.8, 6, 20), new THREE.MeshStandardMaterial({color: 0xffdd00}));
+        this.trainGroup.add(body);
+
+        // 根據類型加細節 (簡化版邏輯)
+        const head = new THREE.Mesh(new THREE.BoxGeometry(5.9, 6.1, 1), new THREE.MeshStandardMaterial({color: (this.trainType==='flagship'?0x111111:0xffdd00)}));
+        head.position.z = -10;
+        this.trainGroup.add(head);
+
+        this.scene.add(this.trainGroup);
+    }
+
+    changeTrain(type) { this.trainType = type; this.createTrain(); }
     toggleATO() { this.isATO = !this.isATO; }
 
     animate() {
         requestAnimationFrame(() => this.animate());
-        if (this.isATO) {
-            this.speed = Math.min(this.speed + 0.1, 20);
-        }
-        this.distance += this.speed * 0.1;
-        this.world.position.z = this.distance;
 
-        // 當跑得太遠，重置世界位置 (循環機制)
-        if (this.distance > 1500) this.distance = 0;
+        if (this.isATO) this.speed = Math.min(this.speed + 0.0005, 0.002); // Progress 增加量
+        this.progress += this.speed;
+        if (this.progress > 1) this.progress = 0;
 
-        document.getElementById('spd').innerText = Math.round(this.speed * 4);
+        // 更新列車位置與轉向
+        const pos = this.curve.getPointAt(this.progress);
+        const tangent = this.curve.getTangentAt(this.progress);
+        
+        this.trainGroup.position.copy(pos);
+        this.trainGroup.lookAt(pos.clone().add(tangent));
+
+        // 攝影機跟隨 (放在車尾上方)
+        const camOffset = tangent.clone().multiplyScalar(-30);
+        this.camera.position.copy(pos).add(camOffset).add(new THREE.Vector3(0, 8, 0));
+        this.camera.lookAt(pos.clone().add(tangent.clone().multiplyScalar(50)));
+
+        document.getElementById('speed').innerText = Math.round(this.speed * 40000); // 模擬時速
         this.renderer.render(this.scene, this.camera);
     }
 }
-window.game = new PixelVMR();
+window.game = new CurvedVMR();
 </script>
 </body>
 </html>
