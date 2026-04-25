@@ -2,90 +2,62 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VMR Simulator: U1 - Vallenhurst</title>
     <style>
         :root {
-            --vmr-yellow: #ffcc00; /* Signal Yellow */
-            --vmr-red: #990000;    /* Crimson Red */
-            --glass: rgba(10, 10, 15, 0.85);
+            --vmr-red: #cc0000;
+            --glass: rgba(15, 15, 20, 0.9);
+        }
+        body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
+        
+        /* PIDS 顯示屏 */
+        #pids {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            width: 80%; background: var(--glass); padding: 15px;
+            border-radius: 10px; border-bottom: 4px solid var(--vmr-red);
+            color: white; display: flex; justify-content: space-between; z-index: 10;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
         }
 
-        body { 
-            margin: 0; background: #000; overflow: hidden; 
-            font-family: 'Segoe UI', sans-serif; touch-action: none;
+        /* 儀表板 */
+        #dashboard {
+            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+            display: flex; gap: 20px; align-items: center; z-index: 10;
         }
-
-        /* 頂部 PIDS 路線圖 */
-        #top-pids {
-            position: absolute; top: 15px; left: 50%; transform: translateX(-50%);
-            width: 90%; height: 65px; background: var(--glass);
-            backdrop-filter: blur(10px); border-radius: 10px;
-            border-bottom: 3px solid var(--vmr-yellow);
-            display: flex; align-items: center; justify-content: space-between;
-            padding: 0 20px; box-sizing: border-box; z-index: 100;
-            border: 1px solid rgba(255,255,255,0.1);
+        .panel {
+            background: var(--glass); padding: 15px 25px; border-radius: 12px;
+            text-align: center; border: 1px solid rgba(255,255,255,0.1);
         }
+        #speed { font-size: 48px; color: #00ff00; font-family: monospace; }
+        .label { color: #aaa; font-size: 12px; margin-top: 5px; }
 
-        .station-info b { font-size: 20px; color: white; }
-        .station-info span { font-size: 12px; color: #aaa; display: block; }
-
-        /* 駕駛儀表板 */
-        #cab-panel {
-            position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
-            width: 100%; max-width: 800px; height: 160px;
-            background: linear-gradient(to top, rgba(0,0,0,1) 70%, transparent);
-            display: flex; justify-content: center; align-items: flex-end;
-            padding-bottom: 20px; gap: 30px; z-index: 100;
+        .btn {
+            background: #333; color: white; border: none; padding: 10px 20px;
+            border-radius: 5px; cursor: pointer; font-size: 14px; transition: 0.2s;
         }
-
-        .meter {
-            background: var(--glass); border-radius: 8px; padding: 10px;
-            border: 1px solid rgba(255,255,255,0.1); text-align: center;
-            min-width: 80px;
-        }
-
-        #speedo { font-size: 45px; color: #00ff00; text-shadow: 0 0 10px #00ff00; font-family: monospace; }
-
-        .lever-bg { width: 20px; height: 80px; background: #222; margin: 5px auto; position: relative; border-radius: 3px; }
-        .bar { position: absolute; bottom: 0; width: 100%; transition: height 0.1s; }
-        .pwr-bar { background: #2ecc71; box-shadow: 0 0 10px #2ecc71; }
-        .brk-bar { background: #e67e22; box-shadow: 0 0 10px #e67e22; }
-
-        .btn { 
-            background: #444; color: white; border: none; padding: 8px 15px; 
-            border-radius: 5px; cursor: pointer; font-size: 12px; margin: 2px;
-        }
-        .btn:active { background: var(--vmr-red); }
+        .btn:hover { background: var(--vmr-red); }
     </style>
 </head>
 <body>
 
-<div id="top-pids">
-    <div class="station-info">
-        <span>NEXT STATION 下一站</span>
-        <b id="cur-station">KEARNY 卡尼</b>
+<div id="pids">
+    <div>
+        <div style="font-size: 12px; color: #888;">NEXT STATION 下一站</div>
+        <div id="stn-name" style="font-size: 24px; font-weight: bold;">KEARNY 卡尼</div>
     </div>
     <div style="text-align: right;">
-        <div id="ato-tag" style="color: #8e44ad; border: 1px solid #8e44ad; padding: 2px 5px; font-size: 10px;">ATO ACTIVE</div>
-        <div style="font-size: 10px; color: var(--vmr-yellow); margin-top: 5px;">VMR U1 - VALLENHURST</div>
+        <div id="ato-status" style="color: #00ff00;">ATO: ACTIVE</div>
+        <div style="font-size: 14px; color: var(--vmr-red);">VMR U1 - Vallenhurst</div>
     </div>
 </div>
 
-<div id="cab-panel">
-    <div class="meter">
-        <div class="lever-bg"><div id="pwr-fill" class="bar pwr-fill"></div></div>
-        <div style="font-size: 10px;">PWR</div>
+<div id="dashboard">
+    <div class="panel">
+        <div id="speed">0</div>
+        <div class="label">km/h</div>
     </div>
-    <div class="meter" style="min-width: 150px;">
-        <div id="speedo">0</div>
-        <div style="font-size: 12px; color: #00ff00;">km/h</div>
-    </div>
-    <div class="meter">
-        <div class="lever-bg"><div id="brk-fill" class="bar brk-fill"></div></div>
-        <div style="font-size: 10px;">BRK</div>
-    </div>
-    <div style="display: flex; flex-direction: column;">
+    <div class="panel" style="display: flex; flex-direction: column; gap: 10px;">
         <button class="btn" onclick="game.toggleATO()">ATO ON/OFF</button>
         <button class="btn" onclick="game.openDoors()">DOORS</button>
     </div>
@@ -99,82 +71,109 @@
 import * as THREE from 'three';
 
 const STATIONS = [
-    { name: "Kearny", cn: "卡尼", pos: 0, type: "suburban" },
-    { name: "Laurel Hill", cn: "勞雷爾山", pos: 1200, type: "suburban" },
-    { name: "Nam Shan", cn: "嵐山", pos: 2800, type: "suburban" },
-    { name: "Pitt Street", cn: "碧街", pos: 4500, type: "suburban" },
-    { name: "Disneyland", cn: "迪士尼", pos: 6500, type: "disney" },
-    { name: "Capitol", cn: "國會", pos: 9000, type: "classic" }
+    { name: "Kearny", cn: "卡尼", pos: 0 },
+    { name: "Laurel Hill", cn: "勞雷爾山", pos: 1500 },
+    { name: "Nam Shan", cn: "嵐山", pos: 3200 },
+    { name: "Disneyland", cn: "迪士尼", pos: 5500 },
+    { name: "Capitol", cn: "國會", pos: 8000 }
 ];
 
-class VMRSim {
+class VMRGame {
     constructor() {
-        this.speed = 0; this.pos = 0; this.accel = 0; this.isATO = true;
+        this.speed = 0;
+        this.pos = 0;
+        this.isATO = true;
         this.init();
-        this.loop();
+        this.animate();
     }
 
     init() {
+        // 場景與攝影機
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0x87ceeb);
-        this.camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 10000);
-        this.camera.position.set(0.6, 1.6, 0); // 司機室視角
+        this.scene.background = new THREE.Color(0x6699ff); // 晴朗天空
+        this.camera = new THREE.PerspectiveCamera(65, window.innerWidth/window.innerHeight, 0.1, 20000);
+        this.camera.position.set(0.8, 1.8, 0); // 司機駕駛視角
 
         this.renderer = new THREE.WebGLRenderer({ antialias: true });
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(this.renderer.domElement);
 
-        const light = new THREE.DirectionalLight(0xffffff, 1);
-        light.position.set(10, 20, 10);
-        this.scene.add(new THREE.AmbientLight(0xffffff, 0.5), light);
+        // 光影
+        const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+        sun.position.set(50, 100, 50);
+        this.scene.add(sun, new THREE.AmbientLight(0xffffff, 0.6));
 
-        // 簡易路軌生成
+        // 1. 生成地面
+        const groundGeo = new THREE.PlaneGeometry(1000, 20000);
+        const groundMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
+        const ground = new THREE.Mesh(groundGeo, groundMat);
+        ground.rotation.x = -Math.PI / 2;
+        this.scene.add(ground);
+
+        // 2. 生成無限延長的路軌
         const trackGeo = new THREE.BoxGeometry(4, 0.2, 20000);
-        const trackMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
-        const tracks = new THREE.Mesh(trackGeo, trackMat);
-        tracks.position.z = -10000;
-        this.scene.add(tracks);
+        const trackMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+        this.track = new THREE.Mesh(trackGeo, trackMat);
+        this.track.position.set(0, 0.1, -10000);
+        this.scene.add(this.track);
 
-        window.addEventListener('keydown', (e) => {
-            if(e.code === "Space") e.preventDefault(); // 防止網頁捲動
+        // 3. 模擬車站 (黑色立柱代表)
+        STATIONS.forEach(s => {
+            const stnGeo = new THREE.BoxGeometry(10, 5, 20);
+            const stnMat = new THREE.MeshStandardMaterial({ color: 0x444444 });
+            const stn = new THREE.Mesh(stnGeo, stnMat);
+            stn.position.set(8, 2.5, -s.pos);
+            this.scene.add(stn);
         });
+
+        window.onresize = () => {
+            this.camera.aspect = window.innerWidth / window.innerHeight;
+            this.camera.updateProjectionMatrix();
+            this.renderer.setSize(window.innerWidth, window.innerHeight);
+        };
+    }
+
+    toggleATO() {
+        this.isATO = !this.isATO;
+        document.getElementById('ato-status').innerText = this.isATO ? "ATO: ACTIVE" : "ATO: MANUAL";
+        document.getElementById('ato-status').style.color = this.isATO ? "#00ff00" : "#ffaa00";
+    }
+
+    openDoors() {
+        if(this.speed < 1) alert("Welcome to Vallenhurst!");
     }
 
     update() {
         if (this.isATO) {
-            const next = STATIONS.find(s => s.pos > this.pos + 5) || STATIONS[STATIONS.length-1];
+            // 尋找下一站
+            const next = STATIONS.find(s => s.pos > this.pos + 10) || STATIONS[STATIONS.length-1];
             const dist = next.pos - this.pos;
-            if (dist > 200) { this.accel = 0.5; }
-            else if (dist > 5) { this.accel = -1.2; }
-            else { this.accel = 0; this.speed = 0; }
-            document.getElementById('cur-station').innerText = `${next.name.toUpperCase()} ${next.cn}`;
+            
+            // 簡單自動駕駛邏輯
+            if (dist > 300) this.speed = Math.min(this.speed + 0.2, 25); // 加速到 90km/h
+            else if (dist > 10) this.speed *= 0.98; // 減速進站
+            else { this.speed = 0; }
+
+            document.getElementById('stn-name').innerText = `${next.name.toUpperCase()} ${next.cn}`;
         }
 
-        this.speed = Math.max(0, this.speed + this.accel * 0.016);
-        this.pos += this.speed * 0.016;
-        this.camera.position.z = -this.pos;
+        this.pos += this.speed * 0.1; // 更新位置
+        this.camera.position.z = -this.pos; // 攝影機跟隨
 
-        // UI 更新
-        document.getElementById('speedo').innerText = Math.round(this.speed * 3.6);
-        document.getElementById('pwr-fill').style.height = this.accel > 0 ? (this.accel/0.5)*100 + '%' : '0%';
-        document.getElementById('brk-fill').style.height = this.accel < 0 ? (Math.abs(this.accel)/1.2)*100 + '%' : '0%';
+        // 循環路軌（讓路軌看起來沒終點）
+        if (this.pos > 10000) this.pos = 0; 
+
+        document.getElementById('speed').innerText = Math.round(this.speed * 3.6);
     }
 
-    toggleATO() { 
-        this.isATO = !this.isATO; 
-        document.getElementById('ato-tag').style.opacity = this.isATO ? 1 : 0.3;
-    }
-
-    openDoors() { if(this.speed < 0.1) alert("Welcome to Vallenhurst!"); }
-
-    loop() {
-        requestAnimationFrame(() => this.loop());
+    animate() {
+        requestAnimationFrame(() => this.animate());
         this.update();
         this.renderer.render(this.scene, this.camera);
     }
 }
 
-const game = new VMRSim();
+const game = new VMRGame();
 </script>
 </body>
 </html>
