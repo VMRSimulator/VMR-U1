@@ -2,42 +2,27 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VMR Simulator: U1 - Vallenhurst</title>
+    <title>VMR Simulator: U1 - Pixel Edition</title>
     <style>
-        :root { --vmr-red: #cc0000; --glass: rgba(15, 15, 20, 0.9); }
-        body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
-        #pids {
-            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
-            width: 80%; background: var(--glass); padding: 15px;
-            border-radius: 10px; border-bottom: 4px solid var(--vmr-red);
-            color: white; display: flex; justify-content: space-between; z-index: 10;
+        body { margin: 0; background: #87CEEB; overflow: hidden; font-family: 'Courier New', monospace; }
+        #ui {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; color: #fff; text-shadow: 2px 2px #000;
         }
-        #dashboard {
-            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
-            display: flex; gap: 20px; align-items: center; z-index: 10;
-        }
-        .panel { background: var(--glass); padding: 15px 25px; border-radius: 12px; text-align: center; border: 1px solid rgba(255,255,255,0.1); }
-        #speed { font-size: 48px; color: #00ff00; font-family: monospace; }
-        .btn { background: #333; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; }
+        .pids { position: absolute; top: 20px; width: 100%; text-align: center; font-size: 24px; }
+        .dashboard { position: absolute; bottom: 40px; width: 100%; text-align: center; }
+        .speed-box { font-size: 60px; display: inline-block; background: rgba(0,0,0,0.7); padding: 10px 20px; border: 4px solid #fff; }
+        .btn { pointer-events: auto; background: #cc0000; color: #fff; border: 4px solid #fff; padding: 10px; cursor: pointer; font-size: 20px; }
     </style>
 </head>
 <body>
 
-<div id="pids">
-    <div>
-        <div style="font-size: 12px; color: #888;">NEXT STATION 下一站</div>
-        <div id="stn-name" style="font-size: 24px; font-weight: bold;">KEARNY 卡尼</div>
+<div id="ui">
+    <div class="pids">NEXT: <span id="stn">KEARNY</span></div>
+    <div class="dashboard">
+        <div class="speed-box"><span id="spd">0</span><br><small>km/h</small></div><br><br>
+        <button class="btn" onclick="game.toggleATO()">ATO ON/OFF</button>
     </div>
-    <div style="text-align: right;">
-        <div id="ato-status" style="color: #00ff00;">ATO: ACTIVE</div>
-        <div style="font-size: 14px; color: var(--vmr-red);">VMR U1 - VALLENHURST</div>
-    </div>
-</div>
-
-<div id="dashboard">
-    <div class="panel"><div id="speed">0</div><div style="color:#aaa; font-size:12px;">km/h</div></div>
-    <button class="btn" onclick="game.toggleATO()">ATO ON/OFF</button>
 </div>
 
 <script type="importmap">
@@ -47,15 +32,7 @@
 <script type="module">
 import * as THREE from 'three';
 
-const STATIONS = [
-    { name: "Kearny", cn: "卡尼", pos: 0 },
-    { name: "Laurel Hill", cn: "勞雷爾山", pos: 2000 },
-    { name: "Nam Shan", cn: "嵐山", pos: 4500 },
-    { name: "Disneyland", cn: "迪士尼", pos: 7000 },
-    { name: "Capitol", cn: "國會", pos: 10000 }
-];
-
-class VMRGame {
+class PixelVMR {
     constructor() {
         this.speed = 0;
         this.distance = 0;
@@ -66,85 +43,87 @@ class VMRGame {
 
     init() {
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0x4488ff); 
-        this.scene.fog = new THREE.Fog(0x4488ff, 100, 1000); // 加入霧氣，更有空間感
+        this.scene.background = new THREE.Color(0x87CEEB); // Minecraft 經典天空藍
+        
+        this.camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+        this.camera.position.set(0, 3, 8); // 稍微抬高攝影機，像像素遊戲視角
+        this.camera.lookAt(0, 2, -10);
 
-        this.camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 2000);
-        this.camera.position.set(0, 2, 0); // 攝影機固定在起點
-
-        this.renderer = new THREE.WebGLRenderer({ antialias: true });
+        this.renderer = new THREE.WebGLRenderer({ antialias: false }); // 像素風不需要平滑抗鋸齒
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(this.renderer.domElement);
 
-        this.scene.add(new THREE.AmbientLight(0xffffff, 0.8));
-        const sun = new THREE.DirectionalLight(0xffffff, 1);
-        sun.position.set(10, 20, 10);
-        this.scene.add(sun);
+        const light = new THREE.DirectionalLight(0xffffff, 1.2);
+        light.position.set(5, 10, 5);
+        this.scene.add(light, new THREE.AmbientLight(0xffffff, 0.5));
 
-        // 建立一個大容器來裝所有景物
         this.world = new THREE.Group();
         this.scene.add(this.world);
 
-        // 生成路軌 (非常長)
-        const trackGeo = new THREE.BoxGeometry(4, 0.2, 20000);
-        const trackMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
-        const track = new THREE.Mesh(trackGeo, trackMat);
-        track.position.z = -10000; // 向前方延伸
-        this.world.add(track);
+        // --- 生成像素地面 (草地) ---
+        const grassGeo = new THREE.BoxGeometry(100, 1, 2000);
+        const grassMat = new THREE.MeshStandardMaterial({ color: 0x4d9343 });
+        const grass = new THREE.Mesh(grassGeo, grassMat);
+        grass.position.y = -0.5;
+        this.world.add(grass);
 
-        // 生成地面
-        const groundGeo = new THREE.PlaneGeometry(1000, 20000);
-        const groundMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
-        const ground = new THREE.Mesh(groundGeo, groundMat);
-        ground.rotation.x = -Math.PI/2;
-        ground.position.z = -10000;
-        this.world.add(ground);
+        // --- 生成像素路軌 ---
+        for (let i = 0; i < 200; i++) {
+            const sleeper = new THREE.Mesh(
+                new THREE.BoxGeometry(5, 0.3, 1),
+                new THREE.MeshStandardMaterial({ color: 0x54382b }) // 木頭色枕木
+            );
+            sleeper.position.z = -i * 10;
+            this.world.add(sleeper);
 
-        // 生成車站與建築物
-        STATIONS.forEach(s => {
-            // 車站月台
-            const stn = new THREE.Mesh(new THREE.BoxGeometry(15, 5, 40), new THREE.MeshStandardMaterial({color: 0xaaaaaa}));
-            stn.position.set(10, 2.5, -s.pos);
+            const railLeft = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.4, 10), new THREE.MeshStandardMaterial({color:0x777777}));
+            railLeft.position.set(-1.5, 0.2, -i * 10);
+            this.world.add(railLeft);
+
+            const railRight = railLeft.clone();
+            railRight.position.x = 1.5;
+            this.world.add(railRight);
+        }
+
+        // --- 生成像素車站與房屋 ---
+        const stns = [0, 500, 1000, 1500];
+        stns.forEach(pos => {
+            // 車站方塊
+            const stn = new THREE.Mesh(new THREE.BoxGeometry(12, 8, 30), new THREE.MeshStandardMaterial({color: 0x888888}));
+            stn.position.set(12, 4, -pos);
             this.world.add(stn);
 
-            // 旁邊的建築物 (卡尼站的白牆藍陽台概念)
-            for(let i=0; i<10; i++) {
-                const house = new THREE.Mesh(new THREE.BoxGeometry(8, 12, 8), new THREE.MeshStandardMaterial({color: 0xeeeeee}));
-                house.position.set(-15, 6, -s.pos - (i*15));
+            // 旁邊的小屋 (Minecraft 風)
+            for(let j=0; j<5; j++) {
+                const house = new THREE.Mesh(new THREE.BoxGeometry(5, 5, 5), new THREE.MeshStandardMaterial({color: 0xeeeeee}));
+                house.position.set(-15, 2.5, -pos - (j*15));
                 this.world.add(house);
+                // 藍色屋頂 (呼應你之前的藍陽台設定)
+                const roof = new THREE.Mesh(new THREE.BoxGeometry(6, 1, 6), new THREE.MeshStandardMaterial({color: 0x0000ff}));
+                roof.position.set(-15, 5.5, -pos - (j*15));
+                this.world.add(roof);
             }
         });
-
-        window.onresize = () => {
-            this.camera.aspect = window.innerWidth / window.innerHeight;
-            this.camera.updateProjectionMatrix();
-            this.renderer.setSize(window.innerWidth, window.innerHeight);
-        };
     }
 
     toggleATO() { this.isATO = !this.isATO; }
 
     animate() {
         requestAnimationFrame(() => this.animate());
-
         if (this.isATO) {
-            const next = STATIONS.find(s => s.pos > this.distance + 10) || STATIONS[STATIONS.length-1];
-            if (next.pos - this.distance > 200) this.speed = Math.min(this.speed + 0.1, 25);
-            else this.speed *= 0.99;
-            document.getElementById('stn-name').innerText = `${next.name.toUpperCase()} ${next.cn}`;
+            this.speed = Math.min(this.speed + 0.1, 20);
         }
-
         this.distance += this.speed * 0.1;
-        // 重要：讓世界往後退，造成列車前進的假象
-        this.world.position.z = this.distance; 
+        this.world.position.z = this.distance;
 
-        document.getElementById('speed').innerText = Math.round(this.speed * 3.6);
-        document.getElementById('ato-status').innerText = `ATO: ${this.isATO ? 'ACTIVE' : 'MANUAL'}`;
-        
+        // 當跑得太遠，重置世界位置 (循環機制)
+        if (this.distance > 1500) this.distance = 0;
+
+        document.getElementById('spd').innerText = Math.round(this.speed * 4);
         this.renderer.render(this.scene, this.camera);
     }
 }
-window.game = new VMRGame();
+window.game = new PixelVMR();
 </script>
 </body>
 </html>
