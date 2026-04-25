@@ -2,10 +2,9 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VMR Simulator: U1 - Vallenhurst Pro</title>
+    <title>VMR Simulator: U1 - Vallenhurst Pro Fix</title>
     <style>
-        :root { --vmr-red: #cc0000; --glass: rgba(10, 10, 12, 0.92); }
+        :root { --vmr-red: #cc0000; --glass: rgba(10, 10, 12, 0.95); }
         body { margin: 0; background: #000; overflow: hidden; font-family: 'Segoe UI', sans-serif; }
         
         #ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; color: white; }
@@ -18,26 +17,26 @@
             backdrop-filter: blur(15px); z-index: 10;
         }
 
+        /* 列車切換介面 */
+        #train-selector {
+            position: absolute; left: 20px; top: 120px; background: var(--glass);
+            padding: 15px; border-radius: 10px; pointer-events: auto; z-index: 20;
+        }
+        .sel-item { padding: 8px 12px; margin: 5px 0; background: #333; cursor: pointer; border-radius: 4px; font-size: 13px; color: white; text-align: left; border: none; width: 100%; }
+        .sel-item:hover { background: #555; }
+        .active-train { border-left: 4px solid #ffdd00; background: #444; }
+
         /* 儀表與按鈕 */
         #dashboard {
             position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
             display: flex; gap: 20px; align-items: flex-end; pointer-events: auto;
         }
-        .gauge { background: var(--glass); padding: 20px; border-radius: 12px; text-align: center; min-width: 100px; border: 1px solid rgba(255,255,255,0.1); }
+        .gauge { background: var(--glass); padding: 20px; border-radius: 12px; text-align: center; border: 1px solid rgba(255,255,255,0.1); }
         #speed { font-size: 48px; color: #00ff00; font-family: 'Consolas', monospace; }
         
         .controls { display: flex; flex-direction: column; gap: 10px; }
-        .btn { background: #222; color: #eee; border: 1px solid #444; padding: 12px 25px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        .btn { background: #222; color: #eee; border: 1px solid #444; padding: 12px 25px; border-radius: 6px; cursor: pointer; font-weight: bold; }
         .btn:hover { background: var(--vmr-red); border-color: white; }
-
-        /* 列車切換介面 */
-        #train-selector {
-            position: absolute; left: 20px; top: 120px; background: var(--glass);
-            padding: 15px; border-radius: 10px; pointer-events: auto;
-        }
-        .sel-item { padding: 8px 12px; margin: 5px 0; background: #333; cursor: pointer; border-radius: 4px; font-size: 13px; }
-        .sel-item:hover { background: #555; }
-        .active-train { border-left: 4px solid #ffdd00; background: #444; }
     </style>
 </head>
 <body>
@@ -46,7 +45,7 @@
     <div id="pids">
         <div>
             <div style="font-size: 12px; color: #888;">NEXT STATION 下一站</div>
-            <div style="font-size: 24px; font-weight: bold; letter-spacing: 2px;">LAUREL HILL 勞雷爾山</div>
+            <div style="font-size: 24px; font-weight: bold;">LAUREL HILL 勞雷爾山</div>
         </div>
         <div style="text-align: right;">
             <div id="ato-indicator" style="color: #00ff00; font-weight: bold;">ATO: ACTIVE</div>
@@ -56,9 +55,9 @@
 
     <div id="train-selector">
         <div style="font-size: 12px; color: #ffdd00; margin-bottom: 10px; font-weight: bold;">SELECT FLEET</div>
-        <div class="sel-item active-train" onclick="game.setTrain('flagship')">U1 Flagship (現代黑框)</div>
-        <div class="sel-item" onclick="game.setTrain('overhead')">U1-S Overhead (集電弓)</div>
-        <div class="sel-item" onclick="game.setTrain('retro')">C-Line Retro (復古圓燈)</div>
+        <button class="sel-item active-train" onclick="game.setTrain('flagship')">U1 Flagship (現代黑框)</button>
+        <button class="sel-item" onclick="game.setTrain('overhead')">U1-S Overhead (集電弓)</button>
+        <button class="sel-item" onclick="game.setTrain('retro')">C-Line Retro (復古圓燈)</button>
     </div>
 
     <div id="dashboard">
@@ -77,40 +76,32 @@
 <script type="module">
 import * as THREE from 'three';
 
-class VMRProSimulator {
+class VMRFixSimulator {
     constructor() {
         this.speed = 0;
         this.distance = 0;
         this.isATO = true;
         this.currentTrainType = 'flagship';
-        this.aiTrains = [];
         this.init();
         this.animate();
     }
 
     init() {
-        // 場景與高畫質渲染器設定
         this.scene = new THREE.Scene();
         this.scene.background = new THREE.Color(0x6699ff);
-        this.scene.fog = new THREE.Fog(0x6699ff, 150, 900);
+        this.scene.fog = new THREE.Fog(0x6699ff, 150, 1000);
 
         this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
         this.renderer.setSize(window.innerWidth, window.innerHeight);
-        this.renderer.toneMapping = THREE.ReinhardToneMapping;
-        this.renderer.toneMappingExposure = 1.2;
         this.renderer.shadowMap.enabled = true;
-        this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         document.body.appendChild(this.renderer.domElement);
 
         this.camera = new THREE.PerspectiveCamera(55, window.innerWidth/window.innerHeight, 0.5, 1500);
-        // 設定在駕駛室視角
         this.camera.position.set(4, 3.8, 12); 
         this.camera.lookAt(4, 3, -50);
 
-        // 光照系統
-        const ambient = new THREE.AmbientLight(0xffffff, 0.6);
-        this.scene.add(ambient);
-        const sun = new THREE.DirectionalLight(0xffffff, 1.5);
+        this.scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+        const sun = new THREE.DirectionalLight(0xffffff, 1);
         sun.position.set(50, 100, 50);
         sun.castShadow = true;
         this.scene.add(sun);
@@ -119,56 +110,23 @@ class VMRProSimulator {
         this.scene.add(this.world);
 
         this.buildEnvironment();
-        this.spawnAITrain();
         this.updatePlayerTrain();
     }
 
-    // 建立真正的 Vallenhurst 列車模型
-    createTrainModel(type) {
-        const train = new THREE.Group();
-        
-        // 車身 - 使用物理材質 (PBR)
-        const bodyGeo = new THREE.BoxGeometry(5.8, 6.2, 45);
-        const bodyMat = new THREE.MeshStandardMaterial({ color: 0xffcc00, metalness: 0.4, roughness: 0.3 });
-        const body = new THREE.Mesh(bodyGeo, bodyMat);
-        body.castShadow = true;
-        train.add(body);
-
-        // VMR 紅色雙飾條
-        const stripeGeo = new THREE.BoxGeometry(6, 0.4, 45);
-        const stripeMat = new THREE.MeshStandardMaterial({ color: 0xcc0000 });
-        const s1 = new THREE.Mesh(stripeGeo, stripeMat); s1.position.y = -0.5; train.add(s1);
-        const s2 = new THREE.Mesh(stripeGeo, stripeMat); s2.position.y = -1.2; train.add(s2);
-
-        // 車頭邏輯區分
-        if(type === 'flagship') {
-            const face = new THREE.Mesh(new THREE.BoxGeometry(5.9, 6.3, 1), new THREE.MeshStandardMaterial({color: 0x111111}));
-            face.position.z = -22.5; train.add(face);
-            // LED 燈
-            const light = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.3), new THREE.MeshBasicMaterial({color: 0xffffff}));
-            light.position.set(2, -1, -23.1); face.add(light);
-            const light2 = light.clone(); light2.position.x = -2; face.add(light2);
-        } else if(type === 'retro') {
-            const face = new THREE.Mesh(new THREE.BoxGeometry(5.9, 6.3, 1), new THREE.MeshStandardMaterial({color: 0xffcc00}));
-            face.position.z = -22.5; train.add(face);
-            // 圓形頭燈
-            const lamp = new THREE.Mesh(new THREE.CircleGeometry(0.4, 16), new THREE.MeshBasicMaterial({color: 0xffffff}));
-            lamp.position.set(1.8, -1.2, -23.1); train.add(lamp);
-            const lamp2 = lamp.clone(); lamp2.position.x = -1.8; train.add(lamp2);
-        } else if(type === 'overhead') {
-            const pantoBase = new THREE.Mesh(new THREE.BoxGeometry(2, 0.5, 2), new THREE.MeshStandardMaterial({color: 0x333333}));
-            pantoBase.position.y = 3.5; train.add(pantoBase);
-            const arm = new THREE.Mesh(new THREE.BoxGeometry(0.2, 4, 0.2), new THREE.MeshStandardMaterial({color: 0x444444}));
-            arm.position.set(0, 5, 0); arm.rotation.x = Math.PI/4; train.add(arm);
-        }
-
-        return train;
-    }
-
     buildEnvironment() {
-        // 路軌與枕木 (雙軌系統)
+        // --- [修正重點] 建立正確的地平面 ---
+        // 確保地平面是水平的 (rotation.x = -Math.PI / 2) 且位於軌道下方 (position.y = -0.5)
+        const groundGeo = new THREE.PlaneGeometry(1000, 4000);
+        const groundMat = new THREE.MeshStandardMaterial({ color: 0x333333, side: THREE.DoubleSide });
+        const ground = new THREE.Mesh(groundGeo, groundMat);
+        ground.rotation.x = -Math.PI / 2; // 水平放置
+        ground.position.y = -0.5; // 位於軌道下方
+        ground.receiveShadow = true;
+        this.world.add(ground);
+
+        // 雙軌與枕木
         const trackX = [-4.5, 4.5];
-        for(let i=0; i<300; i++) {
+        for(let i=0; i<400; i++) {
             let z = -i * 10;
             trackX.forEach(x => {
                 const sleeper = new THREE.Mesh(new THREE.BoxGeometry(6, 0.4, 1.8), new THREE.MeshStandardMaterial({color: 0x221100}));
@@ -177,33 +135,50 @@ class VMRProSimulator {
                 const r1 = rail.clone(); r1.position.set(x-2, 0.6, z); this.world.add(r1);
                 const r2 = rail.clone(); r2.position.set(x+2, 0.6, z); this.world.add(r2);
             });
-
-            // 歐陸風建築物 (每隔一段距離生成)
-            if(i % 15 === 0) {
-                this.createEuroBuilding(15, 0, z);
-                this.createEuroBuilding(-15, 0, z);
-            }
         }
     }
 
-    createEuroBuilding(x, y, z) {
-        const h = 15 + Math.random() * 10;
-        const b = new THREE.Mesh(new THREE.BoxGeometry(10, h, 15), new THREE.MeshStandardMaterial({color: 0xdddddd}));
-        b.position.set(x, h/2, z);
-        b.castShadow = true;
-        // 藍色陽台模擬
-        const balcony = new THREE.Mesh(new THREE.BoxGeometry(10.5, 0.5, 2), new THREE.MeshStandardMaterial({color: 0x0055aa}));
-        for(let j=1; j<h/3; j++) {
-            const bc = balcony.clone(); bc.position.set(0, j*3 - h/2, 0); b.add(bc);
+    createTrainModel(type) {
+        const train = new THREE.Group();
+        const bodyGeo = new THREE.BoxGeometry(5.8, 6.2, 45);
+        const bodyMat = new THREE.MeshStandardMaterial({ color: 0xffcc00, metalness: 0.4, roughness: 0.3 });
+        const body = new THREE.Mesh(bodyGeo, bodyMat);
+        body.castShadow = true;
+        train.add(body);
+
+        // 紅色雙飾條
+        const stripeGeo = new THREE.BoxGeometry(6, 0.4, 45);
+        const stripeMat = new THREE.MeshStandardMaterial({ color: 0xcc0000 });
+        const s1 = new THREE.Mesh(stripeGeo, stripeMat); s1.position.y = -0.5; train.add(s1);
+        const s2 = new THREE.Mesh(stripeGeo, stripeMat); s2.position.y = -1.2; train.add(s2);
+
+        // 車頭細節
+        const face = new THREE.Mesh(new THREE.BoxGeometry(5.9, 6.3, 1), new THREE.MeshStandardMaterial());
+        if(type === 'flagship') {
+            face.material.color.set(0x111111); // 現代黑框
+        } else if(type === 'retro') {
+            face.material.color.set(0xffcc00); // 復古圓燈車頭
+            const lamp = new THREE.Mesh(new THREE.CircleGeometry(0.4, 16), new THREE.MeshBasicMaterial({color: 0xffffff}));
+            lamp.position.set(1.8, -1.2, -0.6); face.add(lamp);
+            const lamp2 = lamp.clone(); lamp2.position.x = -1.8; face.add(lamp2);
+        } else if(type === 'overhead') {
+            face.material.color.set(0x222222);
+            const pantoBase = new THREE.Mesh(new THREE.BoxGeometry(2, 0.5, 2), new THREE.MeshStandardMaterial({color: 0x333333}));
+            pantoBase.position.y = 3.5; train.add(pantoBase);
+            const arm = new THREE.Mesh(new THREE.BoxGeometry(0.2, 4, 0.2), new THREE.MeshStandardMaterial({color: 0x444444}));
+            arm.position.set(0, 5, 0); arm.rotation.x = Math.PI/4; train.add(arm); // 集電弓
         }
-        this.world.add(b);
+        face.position.z = -22.5;
+        train.add(face);
+        return train;
     }
 
     setTrain(type) {
         this.currentTrainType = type;
         this.updatePlayerTrain();
         document.querySelectorAll('.sel-item').forEach(el => el.classList.remove('active-train'));
-        event.target.classList.add('active-train');
+        // 修正：onclick event 需要傳遞
+        if (event) event.target.classList.add('active-train');
     }
 
     updatePlayerTrain() {
@@ -213,17 +188,8 @@ class VMRProSimulator {
         this.scene.add(this.playerTrain);
     }
 
-    spawnAITrain() {
-        const types = ['flagship', 'retro', 'overhead'];
-        const randomType = types[Math.floor(Math.random() * 3)];
-        const ai = this.createTrainModel(randomType);
-        ai.position.set(-4.5, 3.5, -400); // 在左軌反向駛來
-        ai.rotation.y = Math.PI;
-        this.world.add(ai);
-        this.aiTrains.push({ mesh: ai, speed: 1.5 });
-    }
-
     toggleATO() { this.isATO = !this.isATO; }
+    toggleDoors() { alert('Doors Operating...'); }
 
     animate() {
         requestAnimationFrame(() => this.animate());
@@ -232,27 +198,15 @@ class VMRProSimulator {
         this.distance += this.speed * 0.15;
         this.world.position.z = this.distance % 2000;
 
-        // AI 列車邏輯 (迎面駛來)
-        this.aiTrains.forEach(ai => {
-            ai.mesh.position.z += ai.speed + (this.speed * 0.15); 
-            if(ai.mesh.position.z > 200) {
-                ai.mesh.position.z = -800;
-                // 每次重生都隨機更換車型
-                this.world.remove(ai.mesh);
-                const types = ['flagship', 'retro', 'overhead'];
-                ai.mesh = this.createTrainModel(types[Math.floor(Math.random() * 3)]);
-                ai.mesh.position.set(-4.5, 3.5, -800);
-                ai.mesh.rotation.y = Math.PI;
-                this.world.add(ai.mesh);
-            }
-        });
-
         document.getElementById('speed').innerText = Math.round(this.speed * 3.6);
+        document.getElementById('ato-indicator').innerText = `ATO: ${this.isATO ? 'ACTIVE' : 'MANUAL'}`;
+        document.getElementById('ato-indicator').style.color = this.isATO ? "#00ff00" : "#ffaa00";
+
         this.renderer.render(this.scene, this.camera);
     }
 }
 
-window.game = new VMRProSimulator();
+window.game = new VMRFixSimulator();
 </script>
 </body>
 </html>
