@@ -7,30 +7,19 @@
     <style>
         :root { --vmr-red: #cc0000; --glass: rgba(15, 15, 20, 0.9); }
         body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
-        
         #pids {
             position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
             width: 80%; background: var(--glass); padding: 15px;
             border-radius: 10px; border-bottom: 4px solid var(--vmr-red);
             color: white; display: flex; justify-content: space-between; z-index: 10;
         }
-
         #dashboard {
             position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
             display: flex; gap: 20px; align-items: center; z-index: 10;
         }
-        .panel {
-            background: var(--glass); padding: 15px 25px; border-radius: 12px;
-            text-align: center; border: 1px solid rgba(255,255,255,0.1);
-        }
+        .panel { background: var(--glass); padding: 15px 25px; border-radius: 12px; text-align: center; border: 1px solid rgba(255,255,255,0.1); }
         #speed { font-size: 48px; color: #00ff00; font-family: monospace; }
-        .label { color: #aaa; font-size: 12px; margin-top: 5px; }
-
-        .btn {
-            background: #333; color: white; border: none; padding: 10px 20px;
-            border-radius: 5px; cursor: pointer; font-size: 14px;
-        }
-        .btn:active { background: var(--vmr-red); }
+        .btn { background: #333; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -47,11 +36,8 @@
 </div>
 
 <div id="dashboard">
-    <div class="panel"><div id="speed">0</div><div class="label">km/h</div></div>
-    <div class="panel" style="display: flex; flex-direction: column; gap: 10px;">
-        <button class="btn" id="atoBtn">ATO ON/OFF</button>
-        <button class="btn" onclick="alert('Doors Operating...')">DOORS</button>
-    </div>
+    <div class="panel"><div id="speed">0</div><div style="color:#aaa; font-size:12px;">km/h</div></div>
+    <button class="btn" onclick="game.toggleATO()">ATO ON/OFF</button>
 </div>
 
 <script type="importmap">
@@ -63,16 +49,16 @@ import * as THREE from 'three';
 
 const STATIONS = [
     { name: "Kearny", cn: "卡尼", pos: 0 },
-    { name: "Laurel Hill", cn: "勞雷爾山", pos: 1500 },
-    { name: "Nam Shan", cn: "嵐山", pos: 3200 },
-    { name: "Disneyland", cn: "迪士尼", pos: 5500 },
-    { name: "Capitol", cn: "國會", pos: 8000 }
+    { name: "Laurel Hill", cn: "勞雷爾山", pos: 2000 },
+    { name: "Nam Shan", cn: "嵐山", pos: 4500 },
+    { name: "Disneyland", cn: "迪士尼", pos: 7000 },
+    { name: "Capitol", cn: "國會", pos: 10000 }
 ];
 
 class VMRGame {
     constructor() {
         this.speed = 0;
-        this.pos = 0;
+        this.distance = 0;
         this.isATO = true;
         this.init();
         this.animate();
@@ -80,82 +66,85 @@ class VMRGame {
 
     init() {
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0x4488ff); // 天藍色背景
-        
-        // 攝影機修正：near 平面設為 0.1，防止近處黑影
-        this.camera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.1, 30000);
-        // 攝影機位置調整：稍微往後一點，視野更廣
-        this.camera.position.set(0, 2.5, 5); 
+        this.scene.background = new THREE.Color(0x4488ff); 
+        this.scene.fog = new THREE.Fog(0x4488ff, 100, 1000); // 加入霧氣，更有空間感
+
+        this.camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 2000);
+        this.camera.position.set(0, 2, 0); // 攝影機固定在起點
 
         this.renderer = new THREE.WebGLRenderer({ antialias: true });
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(this.renderer.domElement);
 
-        // 燈光
-        const light = new THREE.DirectionalLight(0xffffff, 1.5);
-        light.position.set(10, 20, 10);
-        this.scene.add(light, new THREE.AmbientLight(0xffffff, 0.7));
+        this.scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+        const sun = new THREE.DirectionalLight(0xffffff, 1);
+        sun.position.set(10, 20, 10);
+        this.scene.add(sun);
 
-        // 生成無限路軌 (長度增加，座標修正)
-        const trackGeo = new THREE.BoxGeometry(4, 0.4, 40000);
+        // 建立一個大容器來裝所有景物
+        this.world = new THREE.Group();
+        this.scene.add(this.world);
+
+        // 生成路軌 (非常長)
+        const trackGeo = new THREE.BoxGeometry(4, 0.2, 20000);
         const trackMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
-        this.trackMesh = new THREE.Mesh(trackGeo, trackMat);
-        this.trackMesh.position.set(0, 0, -20000);
-        this.scene.add(this.trackMesh);
+        const track = new THREE.Mesh(trackGeo, trackMat);
+        track.position.z = -10000; // 向前方延伸
+        this.world.add(track);
 
         // 生成地面
-        const groundGeo = new THREE.PlaneGeometry(2000, 40000);
+        const groundGeo = new THREE.PlaneGeometry(1000, 20000);
         const groundMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
         const ground = new THREE.Mesh(groundGeo, groundMat);
-        ground.rotation.x = -Math.PI / 2;
-        ground.position.y = -0.1;
-        this.scene.add(ground);
+        ground.rotation.x = -Math.PI/2;
+        ground.position.z = -10000;
+        this.world.add(ground);
 
-        // 車站標誌物
+        // 生成車站與建築物
         STATIONS.forEach(s => {
-            const box = new THREE.Mesh(
-                new THREE.BoxGeometry(10, 8, 20),
-                new THREE.MeshStandardMaterial({ color: 0xffffff })
-            );
-            box.position.set(8, 4, -s.pos);
-            this.scene.add(box);
+            // 車站月台
+            const stn = new THREE.Mesh(new THREE.BoxGeometry(15, 5, 40), new THREE.MeshStandardMaterial({color: 0xaaaaaa}));
+            stn.position.set(10, 2.5, -s.pos);
+            this.world.add(stn);
+
+            // 旁邊的建築物 (卡尼站的白牆藍陽台概念)
+            for(let i=0; i<10; i++) {
+                const house = new THREE.Mesh(new THREE.BoxGeometry(8, 12, 8), new THREE.MeshStandardMaterial({color: 0xeeeeee}));
+                house.position.set(-15, 6, -s.pos - (i*15));
+                this.world.add(house);
+            }
         });
 
-        document.getElementById('atoBtn').onclick = () => {
-            this.isATO = !this.isATO;
-            document.getElementById('ato-status').innerText = this.isATO ? "ATO: ACTIVE" : "ATO: MANUAL";
-        };
-
-        window.addEventListener('resize', () => {
+        window.onresize = () => {
             this.camera.aspect = window.innerWidth / window.innerHeight;
             this.camera.updateProjectionMatrix();
             this.renderer.setSize(window.innerWidth, window.innerHeight);
-        });
+        };
     }
 
-    update() {
-        if (this.isATO) {
-            const next = STATIONS.find(s => s.pos > this.pos + 20) || STATIONS[STATIONS.length-1];
-            const dist = next.pos - this.pos;
-            if (dist > 500) this.speed = Math.min(this.speed + 0.15, 25);
-            else if (dist > 10) this.speed *= 0.99;
-            else this.speed = 0;
-            document.getElementById('stn-name').innerText = `${next.name.toUpperCase()} ${next.cn}`;
-        }
-        
-        this.pos += this.speed * 0.15;
-        this.camera.position.z = -this.pos + 5; // 相機跟隨
-        document.getElementById('speed').innerText = Math.round(this.speed * 3.6);
-    }
+    toggleATO() { this.isATO = !this.isATO; }
 
     animate() {
         requestAnimationFrame(() => this.animate());
-        this.update();
+
+        if (this.isATO) {
+            const next = STATIONS.find(s => s.pos > this.distance + 10) || STATIONS[STATIONS.length-1];
+            if (next.pos - this.distance > 200) this.speed = Math.min(this.speed + 0.1, 25);
+            else this.speed *= 0.99;
+            document.getElementById('stn-name').innerText = `${next.name.toUpperCase()} ${next.cn}`;
+        }
+
+        this.distance += this.speed * 0.1;
+        // 重要：讓世界往後退，造成列車前進的假象
+        this.world.position.z = this.distance; 
+
+        document.getElementById('speed').innerText = Math.round(this.speed * 3.6);
+        document.getElementById('ato-status').innerText = `ATO: ${this.isATO ? 'ACTIVE' : 'MANUAL'}`;
+        
         this.renderer.render(this.scene, this.camera);
     }
 }
-
-new VMRGame();
+window.game = new VMRGame();
 </script>
 </body>
 </html>
